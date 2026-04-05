@@ -77,16 +77,16 @@ float TextureImage::sample(float u, float v) const
 // ──────────────────────────────────────────────────────────────────────────────
 namespace {
 
-/// Convert a 3-channel RGB pixel buffer to greyscale (average of channels).
+/// Convert a 3-channel RGB pixel buffer to greyscale (BT.601 luminance).
 static std::vector<uint8_t> rgb_to_greyscale(const std::vector<uint8_t> &rgb, size_t n_pixels)
 {
     std::vector<uint8_t> grey(n_pixels);
     for (size_t i = 0; i < n_pixels; ++i) {
-        const uint8_t r = rgb[i * 3 + 0];
-        const uint8_t g = rgb[i * 3 + 1];
-        const uint8_t b = rgb[i * 3 + 2];
-        grey[i] = static_cast<uint8_t>(
-            0.299f * r + 0.587f * g + 0.114f * b + 0.5f);
+        const unsigned r = rgb[i * 3 + 0];
+        const unsigned g = rgb[i * 3 + 1];
+        const unsigned b = rgb[i * 3 + 2];
+        // BT.601 coefficients scaled by 256: R*77 + G*150 + B*29
+        grey[i] = static_cast<uint8_t>((77u * r + 150u * g + 29u * b) >> 8u);
     }
     return grey;
 }
@@ -353,14 +353,14 @@ static bool subdivide_pass(indexed_triangle_set &its, float max_edge_length)
     return true;
 }
 
-static constexpr size_t SAFETY_CAP = 10'000'000;
+static constexpr size_t MAX_SUBDIVISION_TRIANGLES = 10'000'000;
 
 static indexed_triangle_set subdivide(const indexed_triangle_set &input,
                                       float                        max_edge_length)
 {
     indexed_triangle_set its = input;
     for (int iter = 0; iter < 14; ++iter) {
-        if (its.indices.size() >= SAFETY_CAP)
+        if (its.indices.size() >= MAX_SUBDIVISION_TRIANGLES)
             break;
         if (!subdivide_pass(its, max_edge_length))
             break;
@@ -627,7 +627,7 @@ TriangleMesh MeshTexturizer::apply(
     const float half_amp = params.amplitude * 0.5f;
 
     for (size_t vi = 0; vi < its.vertices.size(); ++vi) {
-        const Vec3f pos = its.vertices[vi]; // copy, not reference
+        const Vec3f pos = its.vertices[vi]; // copy before displacement to avoid aliased read after write
         const Vec3f &nrm = normals[vi];
 
         // Compute blended UV and sample texture

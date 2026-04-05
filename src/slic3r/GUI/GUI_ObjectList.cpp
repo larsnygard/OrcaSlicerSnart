@@ -6218,7 +6218,8 @@ void ObjectList::apply_texture_displacement()
     if (any_error) {
         MessageDialog(static_cast<wxWindow *>(wxGetApp().mainframe),
                       _L("Texture displacement failed on one or more parts. "
-                         "Please repair the mesh first."),
+                         "Please repair the mesh first, then try again. "
+                         "Check the application log for details."),
                       _L("Error"), wxOK | wxICON_ERROR).ShowModal();
     }
 

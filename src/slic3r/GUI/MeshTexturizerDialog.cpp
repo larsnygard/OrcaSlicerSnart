@@ -8,6 +8,9 @@
 
 namespace Slic3r { namespace GUI {
 
+// Maximum value shown in the "decimate to" spinner; matches MeshTexturizer.cpp
+static constexpr int MAX_DECIMATION_TRIANGLES = 10'000'000;
+
 MeshTexturizerDialog::MeshTexturizerDialog(wxWindow *parent)
     : DPIDialog(parent, wxID_ANY, _L("Apply Texture Displacement"),
                 wxDefaultPosition, wxDefaultSize,
@@ -126,7 +129,7 @@ void MeshTexturizerDialog::build_controls()
         m_decimate_cb = new wxCheckBox(this, wxID_ANY, _L("Decimate to:"));
         m_target_tris = new wxSpinCtrl(this, wxID_ANY, "100000",
                                         wxDefaultPosition, wxSize(120, -1),
-                                        wxSP_ARROW_KEYS, 1000, 10'000'000, 100000);
+                                        wxSP_ARROW_KEYS, 1000, MAX_DECIMATION_TRIANGLES, 100000);
         m_target_tris->Enable(false);
 
         m_decimate_cb->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent &e) {
