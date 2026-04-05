@@ -1384,6 +1384,8 @@ void MenuFactory::create_extra_object_menu()
     append_menu_item_simplify(&m_object_menu);
     // Object Mesh Subdivision
     append_menu_item_smooth_mesh(&m_object_menu);
+    // Object Texture Displacement
+    append_menu_item_apply_texture(&m_object_menu);
     // merge to single part
     append_menu_item_merge_parts_to_single_part(&m_object_menu);
     // Object Center
@@ -1437,6 +1439,8 @@ void MenuFactory::create_bbl_assemble_object_menu()
     append_menu_item_simplify(&m_assemble_object_menu);
     // Object Mesh Subdivision
     append_menu_item_smooth_mesh(&m_assemble_object_menu);
+    // Object Texture Displacement
+    append_menu_item_apply_texture(&m_assemble_object_menu);
     m_assemble_object_menu.AppendSeparator();
 }
 
@@ -1521,6 +1525,7 @@ void MenuFactory::create_bbl_part_menu()
     append_menu_item_fix_through_netfabb(menu);
     append_menu_item_simplify(menu);
     append_menu_item_smooth_mesh(menu);
+    append_menu_item_apply_texture(menu);
     append_menu_item_center(menu);
     append_menu_item_drop(menu);
     append_menu_items_mirror(menu);
@@ -1553,6 +1558,7 @@ void MenuFactory::create_bbl_assemble_part_menu()
     append_menu_item_delete(menu);
     append_menu_item_simplify(menu);
     append_menu_item_smooth_mesh(menu);
+    append_menu_item_apply_texture(menu);
     menu->AppendSeparator();
 }
 
@@ -2000,6 +2006,18 @@ void MenuFactory::append_menu_item_smooth_mesh(wxMenu *menu)
 {
     wxMenuItem *menu_item = append_menu_item(
         menu, wxID_ANY, _L("Subdivision mesh") + _L("(Lost color)"), "", [](wxCommandEvent &) { obj_list()->smooth_mesh(); }, "", menu, []() { return plater()->can_smooth_mesh(); },
+        m_parent);
+}
+
+void MenuFactory::append_menu_item_apply_texture(wxMenu *menu)
+{
+    append_menu_item(
+        menu, wxID_ANY, _L("Apply Texture Displacement") + dots, "",
+        [](wxCommandEvent &) { obj_list()->apply_texture_displacement(); },
+        "", menu,
+        []() {
+            return plater() && !plater()->get_selection().is_empty();
+        },
         m_parent);
 }
 

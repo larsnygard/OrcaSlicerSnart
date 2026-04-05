@@ -290,6 +290,8 @@ set(lisbslic3r_sources
     Measure.hpp
     MeasureUtils.hpp
     MeshSplitImpl.hpp
+    MeshTexturizer.cpp
+    MeshTexturizer.hpp
     MinAreaBoundingBox.cpp
     MinAreaBoundingBox.hpp
     MinimumSpanningTree.cpp
