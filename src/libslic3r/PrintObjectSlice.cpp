@@ -251,8 +251,10 @@ static std::vector<VolumeSlices> slice_volumes_inner(
                     if (apply_texture && model_volume->is_model_part()) {
                         TriangleMesh displaced = MeshTexturizer::apply(
                             model_volume->mesh(), tex_image, tex_params, throw_on_cancel_callback);
-                        // For range-based slicing with texture we fall back to slicing the displaced
-                        // mesh across the full z range (no per-range filtering needed for texturing).
+                        // When texture displacement is active, slice the displaced mesh across
+                        // the full z range.  The per-range height filtering is skipped here
+                        // because the displacement may shift geometry across range boundaries;
+                        // using the full z list is conservative and correct.
                         out.push_back({
                             model_volume->id(),
                             slice_volume_displaced(std::move(displaced.its), model_volume->get_matrix(),
