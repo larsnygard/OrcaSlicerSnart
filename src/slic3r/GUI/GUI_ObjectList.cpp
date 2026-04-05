@@ -29,6 +29,7 @@
 #include <unordered_map>
 #include <functional>
 #include <boost/algorithm/string.hpp>
+#include <boost/log/trivial.hpp>
 #include <wx/progdlg.h>
 #include <wx/listbook.h>
 #include <wx/numformatter.h>
@@ -46,6 +47,8 @@
 #include "Gizmos/GLGizmoScale.hpp"
 
 #include "libslic3r/TriangleMeshDeal.hpp"
+#include "libslic3r/MeshTexturizer.hpp"
+#include "MeshTexturizerDialog.hpp"
 namespace Slic3r
 {
 namespace GUI
@@ -6147,6 +6150,82 @@ void GUI::ObjectList::smooth_mesh()
         obj->ensure_on_bed();
         plater->changed_mesh(object_idx);
     }
+}
+
+void ObjectList::apply_texture_displacement()
+{
+    auto plater = wxGetApp().plater();
+    if (!plater)
+        return;
+
+    // Show the configuration dialog.
+    MeshTexturizerDialog dlg(static_cast<wxWindow *>(wxGetApp().mainframe));
+    if (dlg.ShowModal() != wxID_OK)
+        return;
+
+    const std::string tex_path = dlg.get_texture_path();
+    if (tex_path.empty()) {
+        MessageDialog(static_cast<wxWindow *>(wxGetApp().mainframe),
+                      _L("Please select a texture image file."),
+                      _L("No texture selected"), wxOK | wxICON_WARNING).ShowModal();
+        return;
+    }
+
+    const MeshTexturizerParams params = dlg.get_params();
+
+    // Load texture.
+    wxBusyCursor cursor;
+    TextureImage texture = MeshTexturizer::load_texture(tex_path);
+    if (!texture.valid()) {
+        MessageDialog(static_cast<wxWindow *>(wxGetApp().mainframe),
+                      _L("Failed to load the selected texture image. "
+                         "Please use a PNG or JPEG file."),
+                      _L("Texture load error"), wxOK | wxICON_ERROR).ShowModal();
+        return;
+    }
+
+    plater->take_snapshot("apply_texture_displacement");
+
+    std::vector<int> obj_idxs, vol_idxs;
+    get_selection_indexes(obj_idxs, vol_idxs);
+    const int object_idx = obj_idxs.front();
+    ModelObject *obj = object(object_idx);
+
+    bool any_error = false;
+
+    auto process_volume = [&](ModelVolume *mv) {
+        try {
+            TriangleMesh result = MeshTexturizer::apply(mv->mesh(), texture, params);
+            mv->set_mesh(result);
+            mv->reset_extra_facets();
+            mv->calculate_convex_hull();
+            mv->invalidate_convex_hull_2d();
+            mv->set_new_unique_id();
+        } catch (const std::exception &ex) {
+            BOOST_LOG_TRIVIAL(error) << "MeshTexturizer::apply failed: " << ex.what();
+            any_error = true;
+        }
+    };
+
+    if (vol_idxs.empty()) {
+        for (auto *mv : obj->volumes)
+            process_volume(mv);
+    } else {
+        for (int vi : vol_idxs)
+            process_volume(obj->volumes[vi]);
+    }
+
+    if (any_error) {
+        MessageDialog(static_cast<wxWindow *>(wxGetApp().mainframe),
+                      _L("Texture displacement failed on one or more parts. "
+                         "Please repair the mesh first, then try again. "
+                         "Check the application log for details."),
+                      _L("Error"), wxOK | wxICON_ERROR).ShowModal();
+    }
+
+    obj->invalidate_bounding_box();
+    obj->ensure_on_bed();
+    plater->changed_mesh(object_idx);
 }
 
 void ObjectList::update_item_error_icon(const int obj_idx, const int vol_idx) const

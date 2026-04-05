@@ -311,6 +311,8 @@ set(SLIC3R_GUI_SOURCES
     GUI/MediaPlayCtrl.h
     GUI/MeshUtils.cpp
     GUI/MeshUtils.hpp
+    GUI/MeshTexturizerDialog.cpp
+    GUI/MeshTexturizerDialog.hpp
     GUI/ModelMall.cpp
     GUI/ModelMall.hpp
     GUI/MonitorBasePanel.cpp
