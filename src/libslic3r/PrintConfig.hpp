@@ -63,6 +63,16 @@ enum class WipeTowerType {
     Type2,
 };
 
+enum class TextureProjectionMode {
+    PlanarXY    = 0,
+    PlanarXZ    = 1,
+    PlanarYZ    = 2,
+    Cylindrical = 3,
+    Spherical   = 4,
+    Triplanar   = 5,
+    Cubic       = 6,
+};
+
 enum PrintHostType {
     htPrusaLink, htPrusaConnect, htOctoPrint, htDuet, htFlashAir, htAstroBox, htRepetier, htMKS, htESP3D, htCrealityPrint, htObico, htFlashforge, htSimplyPrint, htElegooLink
 };
@@ -522,6 +532,7 @@ CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(AuthorizationType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(WipeTowerWallType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(PerimeterGeneratorType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(PowerLossRecoveryMode)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(TextureProjectionMode)
 
 #undef CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS
 
@@ -1081,6 +1092,18 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionFloat,                fuzzy_skin_scale))
     ((ConfigOptionInt,                  fuzzy_skin_octaves))
     ((ConfigOptionFloat,                fuzzy_skin_persistence))
+    ((ConfigOptionBool,                 texture_displacement))
+    ((ConfigOptionString,               texture_displacement_path))
+    ((ConfigOptionEnum<TextureProjectionMode>, texture_displacement_projection))
+    ((ConfigOptionFloat,                texture_displacement_amplitude))
+    ((ConfigOptionFloat,                texture_displacement_max_edge_length))
+    ((ConfigOptionFloat,                texture_displacement_scale_u))
+    ((ConfigOptionFloat,                texture_displacement_scale_v))
+    ((ConfigOptionFloat,                texture_displacement_offset_u))
+    ((ConfigOptionFloat,                texture_displacement_offset_v))
+    ((ConfigOptionFloat,                texture_displacement_rotation))
+    ((ConfigOptionFloat,                texture_displacement_top_angle))
+    ((ConfigOptionFloat,                texture_displacement_bottom_angle))
     ((ConfigOptionFloat,                gap_infill_speed))
     ((ConfigOptionInt,                  sparse_infill_filament))
     ((ConfigOptionFloatOrPercent,       sparse_infill_line_width))

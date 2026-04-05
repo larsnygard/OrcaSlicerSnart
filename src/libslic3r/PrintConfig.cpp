@@ -200,6 +200,17 @@ static t_config_enum_values s_keys_map_FuzzySkinMode {
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(FuzzySkinMode)
 
+static t_config_enum_values s_keys_map_TextureProjectionMode {
+    { "planarxy",    int(TextureProjectionMode::PlanarXY) },
+    { "planarxz",    int(TextureProjectionMode::PlanarXZ) },
+    { "planaryz",    int(TextureProjectionMode::PlanarYZ) },
+    { "cylindrical", int(TextureProjectionMode::Cylindrical) },
+    { "spherical",   int(TextureProjectionMode::Spherical) },
+    { "triplanar",   int(TextureProjectionMode::Triplanar) },
+    { "cubic",       int(TextureProjectionMode::Cubic) }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(TextureProjectionMode)
+
 static t_config_enum_values s_keys_map_InfillPattern {
     { "monotonic", ipMonotonic },
     { "monotonicline", ipMonotonicLine },
@@ -3405,6 +3416,134 @@ void PrintConfigDef::init_fff_params()
     def->max = 1;
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionFloat(0.5));
+
+    def = this->add("texture_displacement", coBool);
+    def->label = L("Texture Displacement");
+    def->category = L("Others");
+    def->tooltip = L("Apply image-based displacement to the mesh surface before slicing. "
+                     "A greyscale PNG or JPEG is used as a height map: white displaces outward, black displaces inward, "
+                     "and 50%% grey leaves the surface unchanged. The texture is applied non-destructively during slicing.");
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionBool(false));
+
+    def = this->add("texture_displacement_path", coString);
+    def->label = L("Texture file");
+    def->category = L("Others");
+    def->tooltip = L("Full path to a greyscale PNG or JPEG file used as the displacement map. "
+                     "White pixels push the surface outward, black pixels push it inward.");
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionString(""));
+
+    def = this->add("texture_displacement_projection", coEnum);
+    def->label = L("Projection mode");
+    def->category = L("Others");
+    def->tooltip = L("UV projection method used to map the texture onto the mesh.");
+    def->enum_keys_map = &ConfigOptionEnum<TextureProjectionMode>::get_enum_values();
+    def->enum_values.push_back("planarxy");
+    def->enum_values.push_back("planarxz");
+    def->enum_values.push_back("planaryz");
+    def->enum_values.push_back("cylindrical");
+    def->enum_values.push_back("spherical");
+    def->enum_values.push_back("triplanar");
+    def->enum_values.push_back("cubic");
+    def->enum_labels.push_back(L("Planar XY"));
+    def->enum_labels.push_back(L("Planar XZ"));
+    def->enum_labels.push_back(L("Planar YZ"));
+    def->enum_labels.push_back(L("Cylindrical"));
+    def->enum_labels.push_back(L("Spherical"));
+    def->enum_labels.push_back(L("Triplanar"));
+    def->enum_labels.push_back(L("Cubic"));
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionEnum<TextureProjectionMode>(TextureProjectionMode::Triplanar));
+
+    def = this->add("texture_displacement_amplitude", coFloat);
+    def->label = L("Displacement amplitude");
+    def->category = L("Others");
+    def->tooltip = L("Maximum displacement distance in mm. White pixels displace by +amplitude/2, black by -amplitude/2.");
+    def->sidetext = L("mm");
+    def->min = 0.01f;
+    def->max = 10;
+    def->mode = comSimple;
+    def->set_default_value(new ConfigOptionFloat(1.0));
+
+    def = this->add("texture_displacement_max_edge_length", coFloat);
+    def->label = L("Max edge length");
+    def->category = L("Others");
+    def->tooltip = L("Mesh edges longer than this value are subdivided before displacement. "
+                     "Smaller values give smoother results but increase triangle count and slicing time.");
+    def->sidetext = L("mm");
+    def->min = 0.1f;
+    def->max = 5;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(0.5));
+
+    def = this->add("texture_displacement_scale_u", coFloat);
+    def->label = L("Scale U");
+    def->category = L("Others");
+    def->tooltip = L("Horizontal UV scale. Values above 1 tile the texture more frequently.");
+    def->min = 0.05f;
+    def->max = 10;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(1.0));
+
+    def = this->add("texture_displacement_scale_v", coFloat);
+    def->label = L("Scale V");
+    def->category = L("Others");
+    def->tooltip = L("Vertical UV scale. Values above 1 tile the texture more frequently.");
+    def->min = 0.05f;
+    def->max = 10;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(1.0));
+
+    def = this->add("texture_displacement_offset_u", coFloat);
+    def->label = L("Offset U");
+    def->category = L("Others");
+    def->tooltip = L("Horizontal UV offset (texture shift).");
+    def->min = -10;
+    def->max = 10;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(0.0));
+
+    def = this->add("texture_displacement_offset_v", coFloat);
+    def->label = L("Offset V");
+    def->category = L("Others");
+    def->tooltip = L("Vertical UV offset (texture shift).");
+    def->min = -10;
+    def->max = 10;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(0.0));
+
+    def = this->add("texture_displacement_rotation", coFloat);
+    def->label = L("UV rotation");
+    def->category = L("Others");
+    def->tooltip = L("UV rotation angle in degrees applied before projection.");
+    def->sidetext = L("°");
+    def->min = -180;
+    def->max = 180;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(0.0));
+
+    def = this->add("texture_displacement_top_angle", coFloat);
+    def->label = L("Top face mask angle");
+    def->category = L("Others");
+    def->tooltip = L("Suppress displacement on upward-facing faces whose normal is within this many degrees of +Z. "
+                     "Set to 0 to disable top-face masking.");
+    def->sidetext = L("°");
+    def->min = 0;
+    def->max = 90;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(0.0));
+
+    def = this->add("texture_displacement_bottom_angle", coFloat);
+    def->label = L("Bottom face mask angle");
+    def->category = L("Others");
+    def->tooltip = L("Suppress displacement on downward-facing faces whose normal is within this many degrees of -Z. "
+                     "Set to 0 to disable bottom-face masking.");
+    def->sidetext = L("°");
+    def->min = 0;
+    def->max = 90;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(0.0));
 
     def = this->add("filter_out_gap_fill", coFloat);
     def->label = L("Filter out tiny gaps");

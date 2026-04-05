@@ -6,6 +6,7 @@
 #include "ElephantFootCompensation.hpp"
 #include "I18N.hpp"
 #include "Layer.hpp"
+#include "MeshTexturizer.hpp"
 #include "MultiMaterialSegmentation.hpp"
 #include "Print.hpp"
 //BBS
@@ -65,6 +66,43 @@ static std::vector<ExPolygons> slice_volume(
         }
     }
     return layers;
+}
+
+// Slice a pre-displaced indexed_triangle_set (for texture displacement integration).
+static std::vector<ExPolygons> slice_volume_displaced(
+    indexed_triangle_set          its,
+    const Transform3d            &volume_trafo,
+    const std::vector<float>     &zs,
+    const MeshSlicingParamsEx    &params,
+    const std::function<void()>  &throw_on_cancel_callback)
+{
+    std::vector<ExPolygons> layers;
+    if (!zs.empty() && !its.indices.empty()) {
+        MeshSlicingParamsEx params2{params};
+        params2.trafo = params2.trafo * volume_trafo;
+        if (params2.trafo.rotation().determinant() < 0.)
+            its_flip_triangles(its);
+        layers = slice_mesh_ex(its, zs, params2, throw_on_cancel_callback);
+        throw_on_cancel_callback();
+    }
+    return layers;
+}
+
+// Build MeshTexturizerParams from PrintConfig settings.
+static MeshTexturizerParams build_texture_params(const PrintConfig &config)
+{
+    MeshTexturizerParams p;
+    p.mode            = static_cast<MeshTexturizerParams::ProjectionMode>(config.texture_displacement_projection.value);
+    p.amplitude       = static_cast<float>(config.texture_displacement_amplitude.value);
+    p.max_edge_length = static_cast<float>(config.texture_displacement_max_edge_length.value);
+    p.scale_u         = static_cast<float>(config.texture_displacement_scale_u.value);
+    p.scale_v         = static_cast<float>(config.texture_displacement_scale_v.value);
+    p.offset_u        = static_cast<float>(config.texture_displacement_offset_u.value);
+    p.offset_v        = static_cast<float>(config.texture_displacement_offset_v.value);
+    p.rotation        = static_cast<float>(config.texture_displacement_rotation.value);
+    p.top_angle_limit    = static_cast<float>(config.texture_displacement_top_angle.value);
+    p.bottom_angle_limit = static_cast<float>(config.texture_displacement_bottom_angle.value);
+    return p;
 }
 
 // Slice single triangle mesh.
@@ -158,6 +196,18 @@ static std::vector<VolumeSlices> slice_volumes_inner(
     //const auto   extra_offset  = is_mm_painted ? 0.f : std::max(0.f, float(print_object_config.xy_contour_compensation.value));
     const auto   extra_offset = 0.f;
 
+    // Texture displacement: load texture once if enabled.
+    const bool texture_enabled = print_config.texture_displacement.value &&
+                                 !print_config.texture_displacement_path.value.empty();
+    TextureImage     tex_image;
+    MeshTexturizerParams tex_params;
+    if (texture_enabled) {
+        tex_image  = MeshTexturizer::load_texture(print_config.texture_displacement_path.value);
+        if (tex_image.valid())
+            tex_params = build_texture_params(print_config);
+    }
+    const bool apply_texture = texture_enabled && tex_image.valid();
+
     for (const ModelVolume *model_volume : model_volumes)
         if (model_volume_needs_slicing(*model_volume)) {
             MeshSlicingParamsEx params { params_base };
@@ -176,10 +226,20 @@ static std::vector<VolumeSlices> slice_volumes_inner(
                         for (; params.slicing_mode_normal_below_layer < zs.size() && zs[params.slicing_mode_normal_below_layer] < region_config.bottom_shell_thickness - EPSILON;
                             ++ params.slicing_mode_normal_below_layer);
                     }
-                    out.push_back({
-                        model_volume->id(),
-                        slice_volume(*model_volume, zs, params, throw_on_cancel_callback)
-                    });
+                    if (apply_texture && model_volume->is_model_part()) {
+                        TriangleMesh displaced = MeshTexturizer::apply(
+                            model_volume->mesh(), tex_image, tex_params, throw_on_cancel_callback);
+                        out.push_back({
+                            model_volume->id(),
+                            slice_volume_displaced(std::move(displaced.its), model_volume->get_matrix(),
+                                                   zs, params, throw_on_cancel_callback)
+                        });
+                    } else {
+                        out.push_back({
+                            model_volume->id(),
+                            slice_volume(*model_volume, zs, params, throw_on_cancel_callback)
+                        });
+                    }
                 }
             } else {
                 assert(! print_config.spiral_mode);
@@ -187,11 +247,24 @@ static std::vector<VolumeSlices> slice_volumes_inner(
                 for (const PrintObjectRegions::LayerRangeRegions &layer_range : layer_ranges)
                     if (layer_range.has_volume(model_volume->id()))
                         slicing_ranges.emplace_back(layer_range.layer_height_range);
-                if (! slicing_ranges.empty())
-                    out.push_back({
-                        model_volume->id(),
-                        slice_volume(*model_volume, zs, slicing_ranges, params, throw_on_cancel_callback)
-                    });
+                if (! slicing_ranges.empty()) {
+                    if (apply_texture && model_volume->is_model_part()) {
+                        TriangleMesh displaced = MeshTexturizer::apply(
+                            model_volume->mesh(), tex_image, tex_params, throw_on_cancel_callback);
+                        // For range-based slicing with texture we fall back to slicing the displaced
+                        // mesh across the full z range (no per-range filtering needed for texturing).
+                        out.push_back({
+                            model_volume->id(),
+                            slice_volume_displaced(std::move(displaced.its), model_volume->get_matrix(),
+                                                   zs, params, throw_on_cancel_callback)
+                        });
+                    } else {
+                        out.push_back({
+                            model_volume->id(),
+                            slice_volume(*model_volume, zs, slicing_ranges, params, throw_on_cancel_callback)
+                        });
+                    }
+                }
             }
             if (! out.empty() && out.back().slices.empty())
                 out.pop_back();

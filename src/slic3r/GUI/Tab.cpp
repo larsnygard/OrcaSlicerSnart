@@ -2685,6 +2685,20 @@ void TabPrint::build()
         optgroup->append_single_option_line("fuzzy_skin_persistence", "others_settings_fuzzy_skin#skin-noise-persistence");
         optgroup->append_single_option_line("fuzzy_skin_first_layer", "others_settings_fuzzy_skin#apply-fuzzy-skin-to-first-layer");
 
+        optgroup = page->new_optgroup(L("Texture Displacement"), L"texture_displacement");
+        optgroup->append_single_option_line("texture_displacement");
+        optgroup->append_single_option_line("texture_displacement_path");
+        optgroup->append_single_option_line("texture_displacement_projection");
+        optgroup->append_single_option_line("texture_displacement_amplitude");
+        optgroup->append_single_option_line("texture_displacement_max_edge_length");
+        optgroup->append_single_option_line("texture_displacement_scale_u");
+        optgroup->append_single_option_line("texture_displacement_scale_v");
+        optgroup->append_single_option_line("texture_displacement_offset_u");
+        optgroup->append_single_option_line("texture_displacement_offset_v");
+        optgroup->append_single_option_line("texture_displacement_rotation");
+        optgroup->append_single_option_line("texture_displacement_top_angle");
+        optgroup->append_single_option_line("texture_displacement_bottom_angle");
+
         optgroup = page->new_optgroup(L("G-code output"), L"param_gcode");
         optgroup->append_single_option_line("reduce_infill_retraction", "others_settings_g_code_output#reduce-infill-retraction");
         optgroup->append_single_option_line("gcode_add_line_number", "others_settings_g_code_output#add-line-number");
