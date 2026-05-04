@@ -327,7 +327,6 @@ void ConfigManipulation::update_print_fff_config(DynamicPrintConfig* config, con
            config->opt_int("enforce_support_layers") == 0 &&
            ! config->opt_bool("detect_thin_wall") &&
            ! config->opt_bool("overhang_reverse") &&
-            config->opt_enum<WallDirection>("wall_direction") == WallDirection::Auto &&
             config->opt_enum<TimelapseType>("timelapse_type") == TimelapseType::tlTraditional &&
             !config->opt_bool("enable_wrapping_detection") &&
             !config->opt_bool("staggered_perimeters")))
@@ -550,8 +549,7 @@ void ConfigManipulation::update_print_fff_config(DynamicPrintConfig* config, con
         apply(config, &new_conf);
         is_msg_dlg_already_exist = false;
     }
-    
-    bool have_arachne = config->opt_enum<PerimeterGeneratorType>("wall_generator") == PerimeterGeneratorType::Arachne;
+
     if (config->opt_enum<FuzzySkinMode>("fuzzy_skin_mode") != FuzzySkinMode::Displacement && !have_arachne) {
         wxString msg_text = _(L("Both [Extrusion] and [Combined] modes of Fuzzy Skin require the Arachne Wall Generator to be enabled."));
         msg_text += "\n\n" + _(L("Change these settings automatically?\n"
