@@ -2438,8 +2438,8 @@ void PerimeterGenerator::process_arachne()
 
         if (this->config->staggered_perimeters) { // If staggered layers are on, all odd perimeters will be staggered and should be printed after the non staggered perimeters
             std::sort(ordered_extrusions.begin(), ordered_extrusions.end(), 
-                [](PerimeterGeneratorArachneExtrusion extrusion_1, PerimeterGeneratorArachneExtrusion extrusion_2) -> bool {
-                return extrusion_1.extrusion->inset_idx % 2 <= extrusion_2.extrusion->inset_idx % 2;
+                [](const PerimeterGeneratorArachneExtrusion& extrusion_1, const PerimeterGeneratorArachneExtrusion& extrusion_2) -> bool {
+                return (extrusion_1.extrusion->inset_idx % 2) < (extrusion_2.extrusion->inset_idx % 2);
                 });
         }
 
