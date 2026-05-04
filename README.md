@@ -42,6 +42,14 @@ If you come across any of these in search results, please <b>report them</b> as 
 
 </div>
 
+# Branch Notice
+
+This branch contains experimental work for syncing and testing PR-8181 against recent main changes.
+
+- It is intended for development and validation only.
+- It may be unstable or broken at times.
+- Use official releases or the main branch for regular use.
+
 # Main features
 
 - **[Advanced Calibration Tools](https://www.orcaslicer.com/wiki/calibration_guide)**  
