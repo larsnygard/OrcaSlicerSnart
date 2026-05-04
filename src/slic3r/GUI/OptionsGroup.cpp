@@ -944,7 +944,15 @@ boost::any ConfigOptionsGroup::get_config_value(const DynamicPrintConfig& config
 
 	boost::any ret;
 	wxString text_value = wxString("");
+
+    // Legacy user/system profiles may still reference removed keys.
+    // Guard against missing option definitions to avoid startup crashes.
+    if (!config.has(opt_key) || config.option(opt_key) == nullptr)
+        return ret;
+
 	const ConfigOptionDef* opt = config.def()->get(opt_key);
+    if (opt == nullptr)
+        return ret;
 
     if (opt->nullable)
     {

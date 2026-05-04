@@ -597,10 +597,33 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
 {
     PresetBundle *preset_bundle  = wxGetApp().preset_bundle;
 
+    auto has_opt = [config](const char *key) {
+        return config->has(key) && config->option(key) != nullptr;
+    };
+    auto opt_int_safe = [config, &has_opt](const char *key, int fallback = 0) {
+        return has_opt(key) ? config->opt_int(key) : fallback;
+    };
+    auto opt_float_safe = [config, &has_opt](const char *key, float fallback = 0.f) {
+        return has_opt(key) ? config->opt_float(key) : fallback;
+    };
+    auto opt_bool_safe = [config, &has_opt](const char *key, bool fallback = false) {
+        return has_opt(key) ? config->opt_bool(key) : fallback;
+    };
+    auto opt_percent_safe = [config, &has_opt](const char *key, double fallback = 0.0) {
+        if (!has_opt(key))
+            return fallback;
+        if (auto *opt = dynamic_cast<const ConfigOptionPercent *>(config->option(key)); opt != nullptr)
+            return opt->value;
+        return fallback;
+    };
+    auto opt_string_safe = [config, &has_opt](const char *key, const std::string &fallback = std::string()) {
+        return has_opt(key) ? config->opt_string(key) : fallback;
+    };
+
     auto gcflavor = preset_bundle->printers.get_edited_preset().config.option<ConfigOptionEnum<GCodeFlavor>>("gcode_flavor")->value;
 
-    bool have_volumetric_extrusion_rate_slope = config->option<ConfigOptionFloat>("max_volumetric_extrusion_rate_slope")->value > 0;
-    float have_volumetric_extrusion_rate_slope_segment_length = config->option<ConfigOptionFloat>("max_volumetric_extrusion_rate_slope_segment_length")->value;
+    bool have_volumetric_extrusion_rate_slope = opt_float_safe("max_volumetric_extrusion_rate_slope") > 0;
+    float have_volumetric_extrusion_rate_slope_segment_length = opt_float_safe("max_volumetric_extrusion_rate_slope_segment_length");
     toggle_field("enable_arc_fitting", !have_volumetric_extrusion_rate_slope);
     toggle_line("max_volumetric_extrusion_rate_slope_segment_length", have_volumetric_extrusion_rate_slope);
     toggle_line("extrusion_rate_smoothing_external_perimeter_only", have_volumetric_extrusion_rate_slope);
@@ -611,23 +634,23 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
         apply(config, &new_conf);
     }
 
-    bool have_perimeters = config->opt_int("wall_loops") > 0;
+    bool have_perimeters = opt_int_safe("wall_loops") > 0;
     for (auto el : { "extra_perimeters_on_overhangs", "ensure_vertical_shell_thickness", "detect_thin_wall", "detect_overhang_wall",
         "seam_position", "staggered_inner_seams", "wall_sequence", "outer_wall_line_width",
         "inner_wall_speed", "outer_wall_speed", "small_perimeter_speed", "small_perimeter_threshold" })
         toggle_field(el, have_perimeters);
 
-    bool have_infill = config->option<ConfigOptionPercent>("sparse_infill_density")->value > 0;
+    bool have_infill = opt_percent_safe("sparse_infill_density") > 0;
     // sparse_infill_filament uses the same logic as in Print::extruders()
     for (auto el : { "sparse_infill_pattern", "infill_combination", "fill_multiline","infill_direction",
         "minimum_sparse_infill_area", "sparse_infill_filament", "infill_anchor", "infill_anchor_max","infill_shift_step","sparse_infill_rotate_template","symmetric_infill_y_axis"})
         toggle_line(el, have_infill);
 
-    bool have_combined_infill = config->opt_bool("infill_combination") && have_infill;
+    bool have_combined_infill = opt_bool_safe("infill_combination") && have_infill;
     toggle_line("infill_combination_max_layer_height", have_combined_infill);
 
     // Infill patterns that support multiline infill.
-    InfillPattern pattern = config->opt_enum<InfillPattern>("sparse_infill_pattern");
+    InfillPattern pattern = has_opt("sparse_infill_pattern") ? config->opt_enum<InfillPattern>("sparse_infill_pattern") : ipGrid;
     bool          have_multiline_infill_pattern = pattern == ipGyroid || pattern == ipGrid || pattern == ipRectilinear || pattern == ipTpmsD || pattern == ipTpmsFK || pattern == ipCrossHatch || pattern == ipHoneycomb || pattern == ipLateralLattice || pattern == ipLateralHoneycomb || pattern == ipConcentric ||
                                                   pattern == ipCubic || pattern == ipStars || pattern == ipAlignedRectilinear || pattern == ipLightning || pattern == ip3DHoneycomb || pattern == ipAdaptiveCubic || pattern == ipSupportCubic|| pattern == ipTriangles || pattern == ipQuarterCubic|| pattern == ipArchimedeanChords || pattern == ipHilbertCurve || pattern == ipOctagramSpiral;
 
@@ -642,34 +665,34 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
             apply(config, &new_conf);
         }
         // Hide infill anchor max if sparse_infill_pattern is not line or if sparse_infill_pattern is line but infill_anchor_max is 0.
-        bool infill_anchor = config->opt_enum<InfillPattern>("sparse_infill_pattern") != ipLine;
+        bool infill_anchor = has_opt("sparse_infill_pattern") && config->opt_enum<InfillPattern>("sparse_infill_pattern") != ipLine;
         toggle_field("infill_anchor_max", infill_anchor);
 
         // Only allow configuration of open anchors if the anchoring is enabled.
-        bool has_infill_anchors = infill_anchor && config->option<ConfigOptionFloatOrPercent>("infill_anchor_max")->value > 0;
+        bool has_infill_anchors = infill_anchor && has_opt("infill_anchor_max") && config->option<ConfigOptionFloatOrPercent>("infill_anchor_max")->value > 0;
         toggle_field("infill_anchor", has_infill_anchors);
     }
 
     //cross zag
-    bool is_cross_zag = config->option<ConfigOptionEnum<InfillPattern>>("sparse_infill_pattern")->value == InfillPattern::ipCrossZag;
-    bool is_locked_zig = config->option<ConfigOptionEnum<InfillPattern>>("sparse_infill_pattern")->value == InfillPattern::ipLockedZag;
+    bool is_cross_zag = has_opt("sparse_infill_pattern") && config->opt_enum<InfillPattern>("sparse_infill_pattern") == InfillPattern::ipCrossZag;
+    bool is_locked_zig = has_opt("sparse_infill_pattern") && config->opt_enum<InfillPattern>("sparse_infill_pattern") == InfillPattern::ipLockedZag;
 
     toggle_line("infill_shift_step", is_cross_zag || is_locked_zig);
     
     for (auto el : { "skeleton_infill_density", "skin_infill_density", "infill_lock_depth", "skin_infill_depth","skin_infill_line_width", "skeleton_infill_line_width" })
         toggle_line(el, is_locked_zig);
 
-    bool is_zig_zag = config->option<ConfigOptionEnum<InfillPattern>>("sparse_infill_pattern")->value == InfillPattern::ipZigZag;
+    bool is_zig_zag = has_opt("sparse_infill_pattern") && config->opt_enum<InfillPattern>("sparse_infill_pattern") == InfillPattern::ipZigZag;
 
     toggle_line("symmetric_infill_y_axis", is_zig_zag || is_cross_zag || is_locked_zig);
 
-    bool has_spiral_vase         = config->opt_bool("spiral_mode");
+    bool has_spiral_vase         = opt_bool_safe("spiral_mode");
     toggle_line("spiral_mode_smooth", has_spiral_vase);
-    toggle_line("spiral_mode_max_xy_smoothing", has_spiral_vase && config->opt_bool("spiral_mode_smooth"));
+    toggle_line("spiral_mode_max_xy_smoothing", has_spiral_vase && opt_bool_safe("spiral_mode_smooth"));
     toggle_line("spiral_starting_flow_ratio", has_spiral_vase);
     toggle_line("spiral_finishing_flow_ratio", has_spiral_vase);
-    bool has_top_shell    = config->opt_int("top_shell_layers") > 0 || (has_spiral_vase && config->opt_int("bottom_shell_layers") > 1);
-    bool has_bottom_shell = config->opt_int("bottom_shell_layers") > 0;
+    bool has_top_shell    = opt_int_safe("top_shell_layers") > 0 || (has_spiral_vase && opt_int_safe("bottom_shell_layers") > 1);
+    bool has_bottom_shell = opt_int_safe("bottom_shell_layers") > 0;
     bool has_solid_infill = has_top_shell || has_bottom_shell;
     toggle_field("top_surface_pattern", has_top_shell);
     toggle_field("bottom_surface_pattern", has_bottom_shell);
@@ -691,7 +714,7 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
     for (auto el : { "top_surface_line_width", "top_surface_speed" })
         toggle_field(el, has_top_shell);
 
-    bool have_default_acceleration = config->opt_float("default_acceleration") > 0;
+    bool have_default_acceleration = opt_float_safe("default_acceleration") > 0;
 
     for (auto el : {"outer_wall_acceleration", "inner_wall_acceleration", "initial_layer_acceleration", "initial_layer_travel_acceleration",
         "top_surface_acceleration", "travel_acceleration", "bridge_acceleration", "sparse_infill_acceleration", "internal_solid_infill_acceleration"})
@@ -712,32 +735,32 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
     } else {
         toggle_field("default_junction_deviation", false);
         toggle_field("default_jerk", true);
-        bool have_default_jerk = config->has("default_jerk") && config->opt_float("default_jerk") > 0;
+        bool have_default_jerk = opt_float_safe("default_jerk") > 0;
         for (auto el : { "outer_wall_jerk", "inner_wall_jerk", "initial_layer_jerk", "initial_layer_travel_jerk", "top_surface_jerk", "travel_jerk", "infill_jerk"}) {
             toggle_line(el, true);
             toggle_field(el, have_default_jerk);
         }
     }
 
-    bool have_skirt = config->opt_int("skirt_loops") > 0;
-    toggle_field("skirt_height", have_skirt && config->opt_enum<DraftShield>("draft_shield") != dsEnabled);
+    bool have_skirt = opt_int_safe("skirt_loops") > 0;
+    toggle_field("skirt_height", have_skirt && has_opt("draft_shield") && config->opt_enum<DraftShield>("draft_shield") != dsEnabled);
     toggle_line("single_loop_draft_shield", have_skirt); // ORCA: Display one wall if skirt enabled
     for (auto el : {"skirt_type", "min_skirt_length", "skirt_distance", "skirt_start_angle", "skirt_speed", "draft_shield"})
         toggle_field(el, have_skirt);
 
-    bool have_brim = (config->opt_enum<BrimType>("brim_type") != btNoBrim);
+    bool have_brim = has_opt("brim_type") && (config->opt_enum<BrimType>("brim_type") != btNoBrim);
     toggle_field("brim_object_gap", have_brim);
     toggle_field("brim_use_efc_outline", have_brim);
     toggle_field("combine_brims", have_brim);
-    bool have_brim_width = (config->opt_enum<BrimType>("brim_type") != btNoBrim) && config->opt_enum<BrimType>("brim_type") != btAutoBrim &&
+    bool have_brim_width = has_opt("brim_type") && (config->opt_enum<BrimType>("brim_type") != btNoBrim) && config->opt_enum<BrimType>("brim_type") != btAutoBrim &&
                            config->opt_enum<BrimType>("brim_type") != btPainted;
     toggle_field("brim_width", have_brim_width);
     toggle_field("brim_flow_ratio", have_brim);
     // wall_filament uses the same logic as in Print::extruders()
     toggle_field("wall_filament", have_perimeters || have_brim);
 
-    bool have_brim_ear = (config->opt_enum<BrimType>("brim_type") == btEar);
-    const auto brim_width = config->opt_float("brim_width");
+    bool have_brim_ear = has_opt("brim_type") && (config->opt_enum<BrimType>("brim_type") == btEar);
+    const auto brim_width = opt_float_safe("brim_width");
     // disable brim_ears_max_angle and brim_ears_detection_length if brim_width is 0
     toggle_field("brim_ears_max_angle", brim_width > 0.0f);
     toggle_field("brim_ears_detection_length", brim_width > 0.0f);
@@ -746,15 +769,15 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
     toggle_line("brim_ears_detection_length", have_brim_ear);
 
     // Hide Elephant foot compensation layers if elefant_foot_compensation is not enabled
-    toggle_line("elefant_foot_compensation_layers", config->opt_float("elefant_foot_compensation") > 0 || config->option<ConfigOptionPercent>("elefant_foot_layers_density")->get_abs_value(1.0f) < 1.0f);
+    toggle_line("elefant_foot_compensation_layers", opt_float_safe("elefant_foot_compensation") > 0 || (has_opt("elefant_foot_layers_density") && config->option<ConfigOptionPercent>("elefant_foot_layers_density")->get_abs_value(1.0f) < 1.0f));
 
-    bool have_raft = config->opt_int("raft_layers") > 0;
-    bool have_support_material = config->opt_bool("enable_support") || have_raft;
+    bool have_raft = opt_int_safe("raft_layers") > 0;
+    bool have_support_material = opt_bool_safe("enable_support") || have_raft;
 
-    SupportType support_type = config->opt_enum<SupportType>("support_type");
-    bool have_support_interface = config->opt_int("support_interface_top_layers") > 0 || config->opt_int("support_interface_bottom_layers") > 0;
-    bool have_support_soluble = have_support_material && config->opt_float("support_top_z_distance") == 0;
-    auto support_style = config->opt_enum<SupportMaterialStyle>("support_style");
+    SupportType support_type = has_opt("support_type") ? config->opt_enum<SupportType>("support_type") : stNormal;
+    bool have_support_interface = opt_int_safe("support_interface_top_layers") > 0 || opt_int_safe("support_interface_bottom_layers") > 0;
+    bool have_support_soluble = have_support_material && opt_float_safe("support_top_z_distance") == 0;
+    auto support_style = has_opt("support_style") ? config->opt_enum<SupportMaterialStyle>("support_style") : smsDefault;
     for (auto el : { "support_style", "support_base_pattern",
         "support_base_pattern_spacing", "support_expansion", "support_angle",
         "support_interface_pattern", "support_interface_top_layers", "support_interface_bottom_layers",
@@ -763,10 +786,10 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
         "support_object_xy_distance", "support_object_first_layer_gap", "independent_support_layer_height"})
         toggle_field(el, have_support_material);
     toggle_field("support_threshold_angle", have_support_material && is_auto(support_type));
-    toggle_field("support_threshold_overlap", config->opt_int("support_threshold_angle") == 0 && have_support_material && is_auto(support_type));
+    toggle_field("support_threshold_overlap", opt_int_safe("support_threshold_angle") == 0 && have_support_material && is_auto(support_type));
     //toggle_field("support_closing_radius", have_support_material && support_style == smsSnug);
 
-    bool support_is_tree = config->opt_bool("enable_support") && is_tree(support_type);
+    bool support_is_tree = opt_bool_safe("enable_support") && is_tree(support_type);
     bool support_is_normal_tree = support_is_tree && support_style != smsTreeOrganic &&
     // Orca: use organic as default
     support_style != smsDefault;
@@ -781,7 +804,7 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
     for (auto el : {"tree_support_branch_angle_organic", "tree_support_branch_distance_organic", "tree_support_branch_diameter_organic", "tree_support_angle_slow", "tree_support_tip_diameter", "tree_support_top_rate", "tree_support_branch_diameter_angle"})
         toggle_line(el, support_is_organic);
 
-    toggle_field("tree_support_brim_width", support_is_tree && !config->opt_bool("tree_support_auto_brim"));
+    toggle_field("tree_support_brim_width", support_is_tree && !opt_bool_safe("tree_support_auto_brim"));
     // tree support use max_bridge_length instead of bridge_no_support
     toggle_line("max_bridge_length", support_is_tree);
     toggle_line("bridge_no_support", !support_is_tree);
@@ -791,9 +814,9 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
         "support_interface_loop_pattern", "support_bottom_interface_spacing" })
         toggle_field(el, have_support_material && have_support_interface);
 
-    bool can_ironing_support = have_raft || (have_support_material && config->opt_int("support_interface_top_layers") > 0);
+    bool can_ironing_support = have_raft || (have_support_material && opt_int_safe("support_interface_top_layers") > 0);
     toggle_field("support_ironing", can_ironing_support);
-    bool has_support_ironing = can_ironing_support && config->opt_bool("support_ironing");
+    bool has_support_ironing = can_ironing_support && opt_bool_safe("support_ironing");
     for (auto el : {"support_ironing_pattern", "support_ironing_flow", "support_ironing_spacing" })
         toggle_line(el, has_support_ironing);
     // Orca: Force solid support interface when using support ironing
@@ -817,20 +840,20 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
     for (auto el : { "raft_first_layer_expansion", "raft_first_layer_density"})
         toggle_field(el, have_support_material && !(support_is_normal_tree && !have_raft));
 
-    bool has_ironing = (config->opt_enum<IroningType>("ironing_type") != IroningType::NoIroning);
+    bool has_ironing = has_opt("ironing_type") && (config->opt_enum<IroningType>("ironing_type") != IroningType::NoIroning);
     for (auto el : { "ironing_pattern", "ironing_flow", "ironing_spacing", "ironing_angle", "ironing_inset", "ironing_angle_fixed" })
         toggle_line(el, has_ironing);
-    bool has_rectilinear_ironing = (config->opt_enum<InfillPattern>("ironing_pattern") == InfillPattern::ipRectilinear);
+    bool has_rectilinear_ironing = has_opt("ironing_pattern") && (config->opt_enum<InfillPattern>("ironing_pattern") == InfillPattern::ipRectilinear);
     for (auto el : {"ironing_angle", "ironing_angle_fixed"})
         toggle_field(el, has_ironing && has_rectilinear_ironing);
     
     toggle_line("ironing_speed", has_ironing || has_support_ironing);
 
-    bool has_zaa = config->opt_bool("zaa_enabled");
+    bool has_zaa = opt_bool_safe("zaa_enabled");
     for (auto el : {"zaa_minimize_perimeter_height", "zaa_min_z", "zaa_dont_alternate_fill_direction", "ironing_expansion"})
         toggle_line(el, has_zaa);
 
-    bool have_sequential_printing = (config->opt_enum<PrintSequence>("print_sequence") == PrintSequence::ByObject);
+    bool have_sequential_printing = has_opt("print_sequence") && (config->opt_enum<PrintSequence>("print_sequence") == PrintSequence::ByObject);
     // for (auto el : { "extruder_clearance_radius", "extruder_clearance_height_to_rod", "extruder_clearance_height_to_lid" })
     //     toggle_field(el, have_sequential_printing);
     toggle_field("print_order", !have_sequential_printing);
@@ -841,18 +864,18 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
     const bool supports_wipe_tower_2 = !is_BBL_Printer && preset_bundle->printers.get_edited_preset().config.opt_enum<WipeTowerType>("wipe_tower_type") == WipeTowerType::Type2;
 
     toggle_field("ooze_prevention", !bSEMM);
-    bool have_ooze_prevention = config->opt_bool("ooze_prevention");
+    bool have_ooze_prevention = opt_bool_safe("ooze_prevention");
     toggle_line("standby_temperature_delta", have_ooze_prevention);
     toggle_line("preheat_time", have_ooze_prevention);
-    int preheat_steps = config->opt_int("preheat_steps");
+    int preheat_steps = opt_int_safe("preheat_steps");
     toggle_line("preheat_steps", have_ooze_prevention && (preheat_steps > 0));
 
-    bool have_prime_tower = config->opt_bool("enable_prime_tower");
+    bool have_prime_tower = opt_bool_safe("enable_prime_tower");
     for (auto el : {"prime_tower_width", "prime_tower_brim_width", "prime_tower_skip_points", "wipe_tower_wall_type", "prime_tower_infill_gap","prime_tower_enable_framework", "enable_tower_interface_features"})
         toggle_line(el, have_prime_tower);
 
     toggle_line("enable_tower_interface_cooldown_during_tower",
-                have_prime_tower && config->opt_bool("enable_tower_interface_features"));
+                have_prime_tower && opt_bool_safe("enable_tower_interface_features"));
 
     for (auto el : {"wall_filament", "sparse_infill_filament", "solid_infill_filament", "wipe_tower_filament"})
         toggle_line(el, !bSEMM);
@@ -865,7 +888,7 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
                     "wipe_tower_no_sparse_layers"})
             toggle_line(el, have_prime_tower && supports_wipe_tower_2);
 
-    WipeTowerWallType wipe_tower_wall_type = config->opt_enum<WipeTowerWallType>("wipe_tower_wall_type");
+    WipeTowerWallType wipe_tower_wall_type = has_opt("wipe_tower_wall_type") ? config->opt_enum<WipeTowerWallType>("wipe_tower_wall_type") : static_cast<WipeTowerWallType>(0);
     bool have_rib_wall = (wipe_tower_wall_type == WipeTowerWallType::wtwRib)&&have_prime_tower;
     toggle_line("wipe_tower_cone_angle", have_prime_tower && supports_wipe_tower_2 && wipe_tower_wall_type == WipeTowerWallType::wtwCone);
     toggle_line("wipe_tower_extra_rib_length", have_rib_wall);
@@ -880,14 +903,14 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
     for (auto el : {"flush_into_infill", "flush_into_support", "flush_into_objects"})
         toggle_field(el, have_prime_tower);
 
-    bool have_avoid_crossing_perimeters = config->opt_bool("reduce_crossing_wall");
+    bool have_avoid_crossing_perimeters = opt_bool_safe("reduce_crossing_wall");
     toggle_line("max_travel_detour_distance", have_avoid_crossing_perimeters);
 
-    bool has_set_other_flow_ratios = config->opt_bool("set_other_flow_ratios");
+    bool has_set_other_flow_ratios = opt_bool_safe("set_other_flow_ratios");
     for (auto el : {"first_layer_flow_ratio", "outer_wall_flow_ratio", "inner_wall_flow_ratio", "overhang_flow_ratio", "sparse_infill_flow_ratio", "internal_solid_infill_flow_ratio", "gap_fill_flow_ratio", "support_flow_ratio", "support_interface_flow_ratio"})
         toggle_line(el, has_set_other_flow_ratios);
 
-    bool has_overhang_speed = config->opt_bool("enable_overhang_speed");
+    bool has_overhang_speed = opt_bool_safe("enable_overhang_speed");
     for (auto el : {"overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed"})
         toggle_line(el, has_overhang_speed);
 
@@ -895,51 +918,51 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
 
     toggle_line("flush_into_objects", !is_global_config);
 
-    toggle_line("support_interface_not_for_body",config->opt_int("support_interface_filament")&&!config->opt_int("support_filament"));
+    toggle_line("support_interface_not_for_body", opt_int_safe("support_interface_filament") && !opt_int_safe("support_filament"));
 
     // Get the current fuzzy skin state
-    bool has_fuzzy_skin = config->opt_enum<FuzzySkinType>("fuzzy_skin") != FuzzySkinType::Disabled_fuzzy;
+    bool has_fuzzy_skin = has_opt("fuzzy_skin") && config->opt_enum<FuzzySkinType>("fuzzy_skin") != FuzzySkinType::Disabled_fuzzy;
     
     // Show fuzzy skin options when fuzzy skin is not disabled
     for (auto el : {"fuzzy_skin_mode", "fuzzy_skin_noise_type", "fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_first_layer"})
         toggle_line(el, has_fuzzy_skin);
     
     // Show noise type specific options with the same logic
-    NoiseType fuzzy_skin_noise_type = config->opt_enum<NoiseType>("fuzzy_skin_noise_type");
+    NoiseType fuzzy_skin_noise_type = has_opt("fuzzy_skin_noise_type") ? config->opt_enum<NoiseType>("fuzzy_skin_noise_type") : NoiseType::Classic;
     toggle_line("fuzzy_skin_scale", fuzzy_skin_noise_type != NoiseType::Classic && has_fuzzy_skin);
     toggle_line("fuzzy_skin_octaves", fuzzy_skin_noise_type != NoiseType::Classic && fuzzy_skin_noise_type != NoiseType::Voronoi && has_fuzzy_skin);
     toggle_line("fuzzy_skin_persistence", (fuzzy_skin_noise_type == NoiseType::Perlin || fuzzy_skin_noise_type == NoiseType::Billow) && has_fuzzy_skin);
 
-    bool have_arachne = config->opt_enum<PerimeterGeneratorType>("wall_generator") == PerimeterGeneratorType::Arachne;
+    bool have_arachne = has_opt("wall_generator") && config->opt_enum<PerimeterGeneratorType>("wall_generator") == PerimeterGeneratorType::Arachne;
     for (auto el : {"wall_transition_length", "wall_transition_filter_deviation", "wall_transition_angle", "min_feature_size", "min_length_factor",
         "min_bead_width", "wall_distribution_count", "initial_layer_min_bead_width", "wall_maximum_resolution", "wall_maximum_deviation"})
         toggle_line(el, have_arachne);
     toggle_field("detect_thin_wall", !have_arachne);
 
     // Orca
-    auto is_role_based_wipe_speed = config->opt_bool("role_based_wipe_speed");
+    auto is_role_based_wipe_speed = opt_bool_safe("role_based_wipe_speed");
     toggle_field("wipe_speed",!is_role_based_wipe_speed);
 
     for (auto el : {"accel_to_decel_enable", "accel_to_decel_factor"})
         toggle_line(el, gcflavor == gcfKlipper);
     if(gcflavor == gcfKlipper)
-        toggle_field("accel_to_decel_factor", config->opt_bool("accel_to_decel_enable"));
+        toggle_field("accel_to_decel_factor", opt_bool_safe("accel_to_decel_enable"));
 
-    bool have_make_overhang_printable = config->opt_bool("make_overhang_printable");
+    bool have_make_overhang_printable = opt_bool_safe("make_overhang_printable");
     toggle_line("make_overhang_printable_angle", have_make_overhang_printable);
     toggle_line("make_overhang_printable_hole_size", have_make_overhang_printable);
 
-    toggle_line("min_width_top_surface", config->opt_bool("only_one_wall_top") || ((config->opt_float("min_length_factor") > 0.5f) && have_arachne)); // 0.5 is default value
+    toggle_line("min_width_top_surface", opt_bool_safe("only_one_wall_top") || ((opt_float_safe("min_length_factor") > 0.5f) && have_arachne)); // 0.5 is default value
 
     for (auto el : { "hole_to_polyhole_threshold", "hole_to_polyhole_twisted" })
-        toggle_line(el, config->opt_bool("hole_to_polyhole"));
+        toggle_line(el, opt_bool_safe("hole_to_polyhole"));
 
-    bool has_detect_overhang_wall = config->opt_bool("detect_overhang_wall");
-    bool has_overhang_reverse     = config->opt_bool("overhang_reverse");
+    bool has_detect_overhang_wall = opt_bool_safe("detect_overhang_wall");
+    bool has_overhang_reverse     = opt_bool_safe("overhang_reverse");
     bool allow_overhang_reverse   = !has_spiral_vase;
     toggle_line("overhang_reverse", allow_overhang_reverse);
     toggle_line("overhang_reverse_internal_only", allow_overhang_reverse && has_overhang_reverse);
-    bool has_overhang_reverse_internal_only = config->opt_bool("overhang_reverse_internal_only");
+    bool has_overhang_reverse_internal_only = opt_bool_safe("overhang_reverse_internal_only");
     if (has_overhang_reverse_internal_only){
         DynamicPrintConfig new_conf = *config;
         new_conf.set_key_value("overhang_reverse_threshold", new ConfigOptionFloatOrPercent(0,true));
@@ -949,12 +972,12 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
     toggle_line("timelapse_type", is_BBL_Printer);
 
 
-    bool have_small_area_infill_flow_compensation = config->opt_bool("small_area_infill_flow_compensation");
+    bool have_small_area_infill_flow_compensation = opt_bool_safe("small_area_infill_flow_compensation");
     toggle_line("small_area_infill_flow_compensation_model", have_small_area_infill_flow_compensation);
 
 
     toggle_field("seam_slope_type", !has_spiral_vase);
-    bool has_seam_slope = !has_spiral_vase && config->opt_enum<SeamScarfType>("seam_slope_type") != SeamScarfType::None;
+    bool has_seam_slope = !has_spiral_vase && has_opt("seam_slope_type") && config->opt_enum<SeamScarfType>("seam_slope_type") != SeamScarfType::None;
     toggle_line("seam_slope_conditional", has_seam_slope);
     toggle_line("seam_slope_start_height", has_seam_slope);
     toggle_line("seam_slope_entire_loop", has_seam_slope);
@@ -963,11 +986,11 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
     toggle_line("seam_slope_inner_walls", has_seam_slope);
     toggle_line("scarf_joint_speed", has_seam_slope);
     toggle_line("scarf_joint_flow_ratio", has_seam_slope);
-    toggle_field("seam_slope_min_length", !config->opt_bool("seam_slope_entire_loop"));
-    toggle_line("scarf_angle_threshold", has_seam_slope && config->opt_bool("seam_slope_conditional"));
-    toggle_line("scarf_overhang_threshold", has_seam_slope && config->opt_bool("seam_slope_conditional"));
+    toggle_field("seam_slope_min_length", !opt_bool_safe("seam_slope_entire_loop"));
+    toggle_line("scarf_angle_threshold", has_seam_slope && opt_bool_safe("seam_slope_conditional"));
+    toggle_line("scarf_overhang_threshold", has_seam_slope && opt_bool_safe("seam_slope_conditional"));
 
-    bool use_beam_interlocking = config->opt_bool("interlocking_beam");
+    bool use_beam_interlocking = opt_bool_safe("interlocking_beam");
     toggle_line("mmu_segmented_region_interlocking_depth", !use_beam_interlocking);
     toggle_line("interlocking_beam_width", use_beam_interlocking);
     toggle_line("interlocking_orientation", use_beam_interlocking);
@@ -975,7 +998,7 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
     toggle_line("interlocking_depth", use_beam_interlocking);
     toggle_line("interlocking_boundary_avoidance", use_beam_interlocking);
 
-    bool lattice_options = config->opt_enum<InfillPattern>("sparse_infill_pattern") == InfillPattern::ipLateralLattice;
+    bool lattice_options = has_opt("sparse_infill_pattern") && config->opt_enum<InfillPattern>("sparse_infill_pattern") == InfillPattern::ipLateralLattice;
     for (auto el : { "lateral_lattice_angle_1", "lateral_lattice_angle_2"})
         toggle_line(el, lattice_options);
         
@@ -984,10 +1007,10 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
 
     //Orca: disable infill_direction/solid_infill_direction if sparse_infill_rotate_template/solid_infill_rotate_template is not empty value and adaptive cubic/support cubic infill pattern is not selected
     toggle_field("sparse_infill_rotate_template", !FillAdaptive);
-    toggle_field("infill_direction", config->opt_string("sparse_infill_rotate_template") == "" && !FillAdaptive);
-    toggle_field("solid_infill_direction", config->opt_string("solid_infill_rotate_template") == "");
+    toggle_field("infill_direction", opt_string_safe("sparse_infill_rotate_template") == "" && !FillAdaptive);
+    toggle_field("solid_infill_direction", opt_string_safe("solid_infill_rotate_template") == "");
     
-    toggle_line("infill_overhang_angle", config->opt_enum<InfillPattern>("sparse_infill_pattern") == InfillPattern::ipLateralHoneycomb);
+    toggle_line("infill_overhang_angle", has_opt("sparse_infill_pattern") && config->opt_enum<InfillPattern>("sparse_infill_pattern") == InfillPattern::ipLateralHoneycomb);
 
     std::string printer_type = wxGetApp().preset_bundle->printers.get_edited_preset().get_printer_type(wxGetApp().preset_bundle);
     toggle_line("enable_wrapping_detection", DevPrinterConfigUtil::support_wrapping_detection(printer_type));
