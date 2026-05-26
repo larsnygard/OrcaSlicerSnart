@@ -121,6 +121,7 @@ std::map<std::string, std::vector<SimpleSettingData>> SettingsFactory::PART_CATE
        {"bottom_shell_thickness", L("Bottom Minimum Shell Thickness"), 1},
        {"bottom_surface_density", L("Bottom Surface Density"), 1},
        {"sparse_infill_density", "", 1},
+       {"fill_multiline", "", 1},
        {"sparse_infill_pattern", "", 1},
        {"lateral_lattice_angle_1", "", 1},
        {"lateral_lattice_angle_2", "", 1},
@@ -1233,7 +1234,7 @@ void MenuFactory::append_menu_items_convert_unit(wxMenu* menu)
 
 void MenuFactory::append_menu_item_merge_to_multipart_object(wxMenu* menu)
 {
-    append_menu_item(menu, wxID_ANY, _L("Assemble"), _L("Assemble the selected objects to an object with multiple parts"),
+    append_menu_item(menu, wxID_ANY, _L("Assemble"), _L("Assemble the selected objects into an object with multiple parts"),
         [](wxCommandEvent&) { obj_list()->merge(true); }, "", menu,
         []() { return obj_list()->can_merge_to_multipart_object(); }, m_parent);
 }
@@ -1241,7 +1242,7 @@ void MenuFactory::append_menu_item_merge_to_multipart_object(wxMenu* menu)
 void MenuFactory::append_menu_item_merge_to_single_object(wxMenu* menu)
 {
     menu->AppendSeparator();
-    append_menu_item(menu, wxID_ANY, _L("Assemble"), _L("Assemble the selected objects to an object with single part"),
+    append_menu_item(menu, wxID_ANY, _L("Assemble"), _L("Assemble the selected objects into an object with single part"),
         [](wxCommandEvent&) { obj_list()->merge(false); }, "", menu,
         []() { return obj_list()->can_merge_to_single_object(); }, m_parent);
 }
@@ -1644,17 +1645,6 @@ void MenuFactory::create_filament_action_menu(bool init, int active_filament_men
             []() { return true; }, m_parent);
     }
 
-    if (init) {
-        append_menu_item(
-            menu, wxID_ANY, _L("Delete"), _L("Delete this filament"), [](wxCommandEvent&) {
-                plater()->sidebar().delete_filament(-2); }, "", nullptr,
-            []() {
-                return plater()->sidebar().combos_filament().size() > 1
-                    // Orca: only show delete filament option for SEMM machines unless is BBL
-                    && Sidebar::should_show_SEMM_buttons();
-            }, m_parent);
-    }
-
     const int item_id = menu->FindItem(_L("Merge with"));
     if (item_id != wxNOT_FOUND)
         menu->Destroy(item_id);
@@ -1675,6 +1665,20 @@ void MenuFactory::create_filament_action_menu(bool init, int active_filament_men
     }
     append_submenu(menu, sub_menu, wxID_ANY, _L("Merge with"), "", "",
         [filaments_cnt]() { return filaments_cnt > 1; }, m_parent);
+
+    // ORCA use delete item on end of menu to prevent accidental clicks. clicking to submenus(merge) already not allowed by OS
+    const int delete_id = menu->FindItem(_L("Delete"));
+    if (delete_id != wxNOT_FOUND)
+        menu->Destroy(delete_id);
+    
+    append_menu_item(
+        menu, wxID_ANY, _L("Delete"), _L("Delete this filament"), [](wxCommandEvent&) {
+            plater()->sidebar().delete_filament(-2); }, "", nullptr,
+        []() {
+            return plater()->sidebar().combos_filament().size() > 1
+                // Orca: only show delete filament option for SEMM machines unless is BBL
+                && Sidebar::should_show_SEMM_buttons();
+        }, m_parent);
 }
 
 //BBS: add part plate related logic
