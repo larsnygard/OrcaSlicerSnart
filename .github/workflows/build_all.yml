@@ -32,8 +32,8 @@ on:
      - 'scripts/flatpak/**'
 
 
-  schedule:
-      - cron: '0 17 * * *' # run once a day at 1 AM Singapore time (UTC+8)
+  #schedule:
+  #    - cron: '0 17 * * *' # run once a day at 1 AM Singapore time (UTC+8)
 
   workflow_dispatch: # allows for manual dispatch
     inputs:
