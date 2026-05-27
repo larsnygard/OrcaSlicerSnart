@@ -1,0 +1,23 @@
+name: Build Windows
+
+on:
+  workflow_dispatch: # allows for manual dispatch only
+    inputs:
+      build-deps-only:
+        description: 'Only build dependencies (bypasses caching)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_windows:
+    name: Build Windows
+    if: ${{ !cancelled() }}
+    uses: ./.github/workflows/build_check_cache.yml
+    with:
+      os: ${{ vars.SELF_HOSTED && 'orca-win-server' || 'windows-latest' }}
+      build-deps-only: ${{ inputs.build-deps-only || false }}
+    secrets: inherit

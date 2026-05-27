@@ -792,23 +792,12 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, co
     toggle_field("support_threshold_overlap", opt_int_safe("support_threshold_angle") == 0 && have_support_material && is_auto(support_type));
     //toggle_field("support_closing_radius", have_support_material && support_style == smsSnug);
 
-<<<<<<< HEAD
-    bool support_is_tree = opt_bool_safe("enable_support") && is_tree(support_type);
-    bool support_is_normal_tree = support_is_tree && support_style != smsTreeOrganic &&
-    // Orca: use organic as default
-    support_style != smsDefault;
-    bool support_is_organic = support_is_tree && !support_is_normal_tree;
-    // settings shared by normal and organic trees
-    for (auto el : {"tree_support_branch_angle", "tree_support_branch_distance", "tree_support_branch_diameter" })
-        toggle_line(el, support_is_normal_tree);
-=======
     bool support_is_tree = config->opt_bool("enable_support") && is_tree(support_type);
     bool support_is_organic = support_is_tree && (support_style == smsTreeOrganic || support_style == smsDefault);
     bool support_is_normal_tree = support_is_tree && !support_is_organic;
 
     // hide settings that are not used by tree supports
     toggle_line("support_threshold_overlap", !support_is_tree); // ORCA: tree supports do not use Threshold Overlap
->>>>>>> origin/main
     // settings specific to normal trees
     for (auto el : {"tree_support_branch_angle", "tree_support_branch_distance", "tree_support_branch_diameter", "tree_support_auto_brim", "tree_support_brim_width"})
         toggle_line(el, support_is_normal_tree);
